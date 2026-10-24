@@ -1,1 +1,42 @@
 
+name: Build Volcako FM2 Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download original Volcako
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/Luomu/volcako/archive/refs/heads/master.zip' -OutFile volcako.zip
+          Expand-Archive volcako.zip . -Force
+          Rename-Item volcako-master volcako-source
+
+      - name: Apply FM2 patch
+        run: python patch_volcako.py volcako-source
+
+      - name: Configure
+        run: cmake -S volcako-source -B volcako-source/build-fm2 -G "Visual Studio 17 2022" -A x64
+
+      - name: Compile
+        run: cmake --build volcako-source/build-fm2 --config Release --parallel
+
+      - name: Package executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem volcako-source -Recurse -Filter volcako.exe -File | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          if (-not $exe) { throw 'Could not find the compiled executable' }
+          Copy-Item $exe.FullName Volcako_FM2.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Volcako_FM2_Windows
+          path: Volcako_FM2.exe
+
