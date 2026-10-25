@@ -1,4 +1,3 @@
-
 name: Build Volcako FM2 Windows
 
 on:
@@ -19,7 +18,7 @@ jobs:
           Expand-Archive volcako.zip . -Force
           Rename-Item volcako-master volcako-source
 
-      - name: Apply FM2 patch
+      - name: Apply FM2 v1.2 patch
         run: python patch_volcako.py volcako-source
 
       - name: Configure
@@ -28,15 +27,36 @@ jobs:
       - name: Compile
         run: cmake --build volcako-source/build-fm2 --config Release --parallel
 
-      - name: Package executable
+      - name: Package executable and original fonts
         shell: pwsh
         run: |
-          $exe = Get-ChildItem volcako-source -Recurse -Filter volcako.exe -File | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem volcako-source -Recurse -Filter volcako.exe -File |
+            Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
           if (-not $exe) { throw 'Could not find the compiled executable' }
-          Copy-Item $exe.FullName Volcako_FM2.exe
+
+          $fontSource = 'volcako-source/misc/fonts'
+          if (-not (Test-Path "$fontSource/DroidSans.ttf")) {
+            throw 'Original Volcako font directory not found'
+          }
+          $destination = 'Volcako_FM2_v1_2'
+          New-Item -ItemType Directory -Path "$destination/misc/fonts" -Force | Out-Null
+          Copy-Item $exe.FullName "$destination/Volcako_FM2.exe"
+          Copy-Item "$fontSource/*" "$destination/misc/fonts/" -Recurse -Force
+          Copy-Item 'volcako-source/LICENSE.txt' "$destination/ORIGINAL_LICENSE.txt"
+          @'
+          Volcako FM2 v1.2
+          ----------------
+          Run Volcako_FM2.exe from this extracted folder.
+          Keep the misc/fonts directory beside the executable.
+          Interface scale: File > Options > Interface scale (75-150%).
+          Close and reopen the application to apply the new scale.
+          Your chosen scale is saved in settings.ini when you close the app.
+          Existing FM2 mute and wheel controls are unchanged.
+          Original Volcako by Luomu (MIT licence, included).
+          '@ | Set-Content "$destination/README.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Volcako_FM2_Windows
-          path: Volcako_FM2.exe
-
+          name: Volcako_FM2_v1_2_Windows
+          path: Volcako_FM2_v1_2/
